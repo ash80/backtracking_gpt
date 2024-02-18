@@ -27,7 +27,7 @@ def delete_note(notes: List[str], reasons: List[str], starts_with: str, reason: 
     for note in notes:
         if note.startswith(starts_with):
             notes.remove(note)
-    add_reason(reasons, f'({DELETE_TAG[1:]}): {reason}')
+            add_reason(reasons, f'({DELETE_TAG[1:]}): {reason}')
 
 
 def add_note(notes: List[str], note: str):
@@ -117,7 +117,7 @@ def main():
         for command in commands:
             command_tag, params = parse_command_and_params(command, global_tags, global_tag_attrs)
             if command_tag == DELETE_TAG:
-                delete_note(notes, reasons *params)
+                delete_note(notes, reasons, *params)
             elif command_tag == NOTE_TAG:
                 add_note(notes, *params)
             elif command_tag == FINISH_TAG:
