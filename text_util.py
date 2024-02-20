@@ -8,16 +8,20 @@ def extract_commands(text: str, all_tags: str) -> list[str]:
     pattern = '|'.join([f"({tag}\s+[^/>]*?/>)" for tag in all_tags])
 
     # Use re.findall to find all occurrences that match the pattern
-    matches: List[List[str]] = re.findall(pattern, text)
+    matches = re.findall(pattern, text)
+
+    if not matches:
+        return []
     
     # Since re.findall might return a list of tuples if there are multiple capturing groups, flatten the list
-    matches = [match for sublist in matches for match in sublist if match]
+    if type(matches[0]) == list or type(matches[0]) == tuple:
+        matches = [match for sublist in matches for match in sublist if match]
 
     return matches
 
 
 def parse_command_and_params(command: str, all_tags: List[str], tag_attrs: dict):
-    
+
     i = 0
     while not command.startswith(all_tags[i]):
         i += 1

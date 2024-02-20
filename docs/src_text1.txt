@@ -1,0 +1,92 @@
+import os
+import tkinter as tk
+from tkinter import filedialog
+from PIL import Image, ImageTk
+
+class ImageComparer(tk.Tk):
+    def __init__(self, display_height=640):
+        super().__init__()
+
+        self.title("Image Comparer")
+
+        # Display dimensions
+        # self.display_width = display_width
+        self.display_height = display_height
+
+        self.folder1_path = filedialog.askdirectory(title="Select the first folder")
+        self.folder2_path = filedialog.askdirectory(title="Select the second folder")
+
+        # Find common filenames between the two folders
+        self.file_list = self.get_common_files(self.folder1_path, self.folder2_path)
+        if not self.file_list:
+            print("No common files found in the provided folders!")
+            self.destroy()
+            return
+
+        self.current_index = 0
+
+        self.load_images()
+        self.tk_image = ImageTk.PhotoImage(self.current_image)
+
+        self.label = tk.Label(self, image=self.tk_image)
+        self.label.pack()
+        self.folder_label = tk.Label(self, text=self.folder1_path)
+        self.folder_label.pack()
+
+        self.toggle_button = tk.Button(self, text="Toggle Image", command=self.toggle_image)
+        self.toggle_button.pack()
+
+        self.prev_button = tk.Button(self, text="Back", command=self.prev_image)
+        self.prev_button.pack(side=tk.LEFT)
+
+        self.next_button = tk.Button(self, text="Next", command=self.next_image)
+        self.next_button.pack(side=tk.RIGHT)
+
+    def get_common_files(self, folder1, folder2):
+        files1 = set(os.listdir(folder1))
+        files2 = set(os.listdir(folder2))
+        common_files = list(files1.intersection(files2))
+        common_files.sort()
+        return common_files
+        
+
+    def load_and_resize_image(self, path):
+        image = Image.open(path).convert("RGBA")
+        w, h = image.size
+        return image.resize((int(w * self.display_height/ h), self.display_height), Image.LANCZOS)
+
+    def load_images(self):
+        image1_path = os.path.join(self.folder1_path, self.file_list[self.current_index])
+        image2_path = os.path.join(self.folder2_path, self.file_list[self.current_index])
+        self.image1 = self.load_and_resize_image(image1_path)
+        self.image2 = self.load_and_resize_image(image2_path)
+        self.current_image = self.image1
+
+    def toggle_image(self):
+        if self.current_image == self.image1:
+            self.current_image = self.image2
+            self.folder_label.config(text=self.folder2_path)
+        else:
+            self.current_image = self.image1
+            self.folder_label.config(text=self.folder1_path)
+        self.tk_image = ImageTk.PhotoImage(self.current_image)
+        self.label.config(image=self.tk_image)
+
+    def prev_image(self):
+        if self.current_index > 0:
+            self.current_index -= 1
+            self.load_images()
+            self.tk_image = ImageTk.PhotoImage(self.image1)
+            self.label.config(image=self.tk_image)
+
+    def next_image(self):
+        if self.current_index < len(self.file_list) - 1:
+            self.current_index += 1
+            self.load_images()
+            self.tk_image = ImageTk.PhotoImage(self.image1)
+            self.label.config(image=self.tk_image)
+            self.folder_label.config(text=self.folder1_path)
+
+if __name__ == "__main__":
+    app = ImageComparer()
+    app.mainloop()
