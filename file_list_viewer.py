@@ -1,6 +1,7 @@
 import os
 from typing import Optional
 from file_viewer import TerminalFileViewer
+from prettify_util import color_tags
 
 from text_util import REASON_ATTR, extract_commands, parse_command_and_params
 
@@ -28,11 +29,16 @@ class TerminalFileListViewer:
 
 
     def display_files(self):
-        display_str = "\n'''Resource - File Lists\n"
+        title = "Resource - File Lists"
+        pretty_display_str = '=' * (len(title) + 4) + f'= {title} =' + '=' * (len(title) + 4) + '\n'
+        display_str = f"\n'''{title}\n"
         for a_file in self.files:
-            display_str += f'{OPEN_TAG} {tag_attrs[OPEN_TAG][0]}="{a_file}" {REASON_ATTR}="?"/>\n'
+            original_str = f'{OPEN_TAG} {tag_attrs[OPEN_TAG][0]}="{a_file}" {REASON_ATTR}="?"/>'
+            display_str += f'{original_str}\n'
+            pretty_display_str += color_tags(f'|  {original_str.ljust((len(title) + 3) * 3)}|\n')
         display_str += "'''\n"
-        return display_str
+        pretty_display_str += '=' * (len(title) + 4) * 3 + '\n'
+        return display_str, pretty_display_str
 
 
     def open_file(self, filename, reason):
@@ -41,7 +47,7 @@ class TerminalFileListViewer:
             self.viewer = TerminalFileViewer(filename, self.close_browser)
             return self.viewer.run()[0], f'({OPEN_TAG[1:]}: {filename}): {reason}'
         else:
-            return None, None
+            return self.display_files(), None
 
     def close_browser(self, formatted_reason):
         self.viewer = None
@@ -68,6 +74,6 @@ if __name__ == '__main__':
     filelist_viewer = TerminalFileListViewer()
     text = None
     while True:
-        disp, reason = filelist_viewer.run(text)
-        print(disp)
+        disps, reason = filelist_viewer.run(text)
+        print(disps[1])
         text = input('Enter command:\n')

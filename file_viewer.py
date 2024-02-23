@@ -1,5 +1,6 @@
 import re
 import math
+from prettify_util import color_tags, wrap_and_format_line
 
 from text_util import REASON_ATTR, extract_commands, parse_command_and_params
 
@@ -41,18 +42,28 @@ class TerminalFileViewer:
 
 
     def display_content(self):
-        display_str = "\n'''Resource - File Browser\n"
+        title = "Resource - File Browser"
+        display_str = f"\n'''{title}\n"
+        pretty_display_str = '=' * (len(title) + 4) + f'= {title} =' + '=' * (len(title) + 4) + '\n'
+        search_act = f'{SEARCH_TAG} {tag_attrs[SEARCH_TAG][0]}="?" {REASON_ATTR}="?"/>'
+        close_act = f'{CLOSE_TAG} {REASON_ATTR}="?"/>'
         if self.search_mode:
-            top_bar = f'Search Mode: {tag_attrs[SEARCH_TAG][0]}="{self.query}"'
-            top_bar += f' {SEARCH_TAG} {tag_attrs[SEARCH_TAG][0]}="?" {REASON_ATTR}="?"/>'
-            top_bar += f' {CLOSE_TAG} {REASON_ATTR}="?"/>'
+            top_bar = f'Search Mode - {tag_attrs[SEARCH_TAG][0]}: "{self.query}"'
+            pretty_display_str += top_bar.center((len(title) + 4) * 3) + '\n'
+            top_bar += f' {search_act}'
+            top_bar += f' {close_act}'
+            pretty_display_str += color_tags(f'{search_act}')
+            pretty_display_str += color_tags(f'{close_act}'.rjust((len(title) + 4) * 3 - len(search_act)) + '\n')
             contents = self.search_results
             page = self.search_page
             lines_per_page = self.searches_per_page
         else:
             top_bar = f'File: {self.filepath}'
-            top_bar += f' {SEARCH_TAG} {tag_attrs[SEARCH_TAG][0]}="?" {REASON_ATTR}="?"/>'
-            top_bar += f' {CLOSE_TAG} {REASON_ATTR}="?"/>'
+            pretty_display_str += top_bar.center((len(title) + 4) * 3) + '\n'
+            top_bar += f' {search_act}'
+            top_bar += f' {close_act}'
+            pretty_display_str += color_tags(f'{search_act}')
+            pretty_display_str += color_tags(f'{close_act}'.rjust((len(title) + 4) * 3 - len(search_act)) + '\n')
             contents = self.main_contents
             page = self.content_page
             lines_per_page = self.contents_per_page
@@ -64,20 +75,28 @@ class TerminalFileViewer:
         for line in contents[start:end]:
             # print(line.strip())
             display_str += f"{line.strip()}\n"
+            pretty_display_str += wrap_and_format_line(line.strip(), (len(title) + 4) * 3)
 
         bottom_bar = ''
-        if page > 1:
-            bottom_bar += f'{PREVIOUS_TAG} {REASON_ATTR}="?"/> '
         max_pages = math.ceil(len(contents) / lines_per_page)
-        bottom_bar += f'Page {page} of {max_pages}'
+        page_num = f'Page {page} of {max_pages}'
+        pretty_display_str += page_num.center((len(title) + 4) * 3) + '\n'
+        if page > 1:
+            prev_act = f'{PREVIOUS_TAG} {REASON_ATTR}="?"/>'
+            pretty_display_str += color_tags(prev_act)
+            bottom_bar += f'{prev_act} '
+        bottom_bar += page_num
 
         if page < max_pages:
-            bottom_bar += f' {NEXT_TAG} {REASON_ATTR}="?"/>'
+            next_act = f'{NEXT_TAG} {REASON_ATTR}="?"/>'
+            bottom_bar += f' {next_act}'
+            pretty_display_str += color_tags(f'{next_act}'.rjust((len(title) + 4) * 3 - (len(prev_act) if page > 1 else 0))) + '\n'
 
         # print(bottom_bar)
         display_str += f"{bottom_bar}\n"
         display_str += "'''\n"
-        return display_str
+        pretty_display_str += '=' * (len(title) + 4) * 3 + '\n'
+        return display_str, pretty_display_str
 
 
     def search(self, query, reason):
@@ -95,7 +114,7 @@ class TerminalFileViewer:
 
             self.search_results.append('\n'.join(self.main_contents[lower_bound:upper_bound]))
         if not self.search_results:
-            self.search_results.append("No exact match! please search for some other word\n")
+            self.search_results.append("No exact match!\n")
         return self.display_content(), f'({SEARCH_TAG[1:]}: {query}): {reason}'
 
 
@@ -149,12 +168,9 @@ class TerminalFileViewer:
 
 if __name__ == '__main__':
     # Example usage:
-    viewer = TerminalFileViewer('src_text.txt')
+    viewer = TerminalFileViewer('docs/src_text_p.txt', lambda a: a)
     text = None
     while True:
-        disp, reason = viewer.run(text)
-        print(disp)
-        if viewer.end_viewer:
-            break
-        else:
-            text = input('Enter command: ')
+        disps, reason = viewer.run(text)
+        print(disps[1])
+        text = input('Enter command: ')

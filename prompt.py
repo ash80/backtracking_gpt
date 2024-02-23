@@ -4,6 +4,7 @@ from langchain.prompts import ChatPromptTemplate
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 
 from file_list_viewer import TerminalFileListViewer
+from prettify_util import color_tags
 from text_util import REASON_ATTR, extract_commands, parse_command_and_params
 # from langchain.prompts import HumanMessagePromptTemplate
 
@@ -21,8 +22,10 @@ global_tag_attrs = {
     FINISH_TAG: [REASON_ATTR]
 }
 
+MAX_NUM_PAST_ACTIONS = 10
+
 NOTES_START_STRING = "Notes (old to new):"
-REASONS_START_STRING = "Last few actions and reasons (old to new):"
+REASONS_START_STRING = f"Last {MAX_NUM_PAST_ACTIONS} actions and reasons (old to new):"
 
 def delete_note(notes: List[str], reasons: List[str], starts_with: str, reason: str):
     if (starts_with.startswith('- ')):
@@ -38,6 +41,8 @@ def add_note(notes: List[str], note: str):
 
 
 def add_reason(reasons: List[str], reason: str):
+    if len(reasons) >= MAX_NUM_PAST_ACTIONS:
+        del reasons[0]
     reasons.append(reason)
 
 
@@ -47,23 +52,29 @@ def list_to_str(a_list):
         final_str += f"- {item}\n"
     return final_str
 
+NOTE_ACT = f'{NOTE_TAG} {global_tag_attrs[NOTE_TAG][0]}="?"/>'
+DELETE_ACT = f'{DELETE_TAG} {global_tag_attrs[DELETE_TAG][0]}="?" {REASON_ATTR}="?"/>'
+FINISH_ACT = f'{FINISH_TAG} {REASON_ATTR}="?"/>'
+
+GLOBAL_ACTIONS = [NOTE_ACT, DELETE_ACT, FINISH_ACT]
+
 def get_base_system_message() -> SystemMessage:
     return SystemMessage(content=f'''You are a helpful LLM agent. You objective is to find the info that perfectly achieves the "goal". Rest assured that available {RESOURCE} is sufficient to achieve the goal.
 You have a finite token length so you need keep your notes under that length.
-You can take some actions by typing out that action. Each action can be identified by an html like tag. Most tags have a {REASON_ATTR}="?" attribute. Replace ? with why you're taking that action.
-Below are some actions that are always available:
+You can take some actions by typing out that action. Each action can be identified by an html like tag. Most actions have a {REASON_ATTR}="?" attribute. Replace ? with why you're taking that action.
+Below are some global actions that are always available:
 
-1. {NOTE_TAG} note="?"/>: To take a variety of notes.
-2. {DELETE_TAG} {global_tag_attrs[DELETE_TAG][0]}="?" {REASON_ATTR}="?"/>: To delete a previously added note. Replace ? for {global_tag_attrs[DELETE_TAG][0]} with the few starting words of the summary.
-3. {FINISH_TAG} {REASON_ATTR}="?"/>: Only type this action when you have successfully achieved your goal.
+1. {NOTE_ACT}: To take a variety of notes.
+2. {DELETE_ACT}: To delete a previously added note. Replace ? for {global_tag_attrs[DELETE_TAG][0]} with the few starting words of the summary.
+3. {FINISH_ACT}: Only type this action when you have successfully achieved your goal.
 
 To fit everything in the limited token length, it's essential to keep on deleting the notes that become irrelevant in light of new info.
 Other actions are available with the {RESOURCE}.
 Don't take the same action as in the "{REASONS_START_STRING}" list.
 All the notes are added to "{NOTES_START_STRING}" list, which will be fed to you in the next iteration.
-You must always select one action with the {RESOURCE} below and others from above 3 actions. Typically you would always need to take {NOTE_TAG} action to note down alternative actions you could take, and actions you want to avoid. So that you know how backtrack if you get stuck.
+You can select at most one action from the {RESOURCE} below and one or more from above 3 global actions. You MUST always take {NOTE_TAG} action to note down alternative actions you could take, and actions you want to avoid. So that you know how to backtrack if you get stuck.
 You must only respond with two or more actions and ensure that tags you generate match the displayed format.
-Don't take any action that is not listed. An action that isn't wrapped with html-tag is not active.
+{RESOURCE} operate in different views. Each view has different set of actions. Any action you took in the past may not work now because {RESOURCE} may be in a different view. Only take actions that are in the global actions or {RESOURCE} action list. An action that isn't wrapped with html-tag is not active.
 ''')
 
 
@@ -75,11 +86,11 @@ def main():
     notes = []
     reasons = []
     model_name : Literal['gpt-4-turbo-preview', 'gpt-3.5-turbo', 'gpt-4'] = 'gpt-4-turbo-preview'
-    llm = ChatOpenAI(model=model_name, temperature=0.1)
-    context_lengths = {'gpt-3.5-turbo': 4097, 'gpt-4-turbo-preview': 128000, 'gpt-4': 32000}
+    context_lengths = {'gpt-3.5-turbo': 4097, 'gpt-4-turbo-preview': 4096, 'gpt-4': 32000}
     max_tokens = context_lengths[model_name]
+    llm = ChatOpenAI(model=model_name, temperature=0.1, max_tokens=max_tokens)
     def context_window_func(x) -> str: 
-        return f"Available tokens {max_tokens - x} | {x * 100//max_tokens}% Used\n"
+        return f"Available tokens {max_tokens - x} | {(x * 100/max_tokens):.2f}% Used\n"
     # goal = input("Enter goal: ")
     goal = "How much money air canada must pay to Moffatt?"
     text = None
@@ -92,7 +103,7 @@ def main():
             get_base_system_message(),
             get_human_message(goal),
         ]
-        disp, reason = app.run(text)
+        disps, reason = app.run(text)
         if reason:    
             add_reason(reasons, reason)
         reasons_str = list_to_str(reasons) if reasons else 'No actions and reasons\n\n'
@@ -103,22 +114,30 @@ def main():
         num_tokens = llm.get_num_tokens_from_messages(all_messages)
         num_tokens += llm.get_num_tokens(system_message_contents)
         num_tokens += llm.get_num_tokens(context_window_func(3 * max_tokens // 4))
-        system_message_contents = context_window_func(num_tokens) + system_message_contents
-        if disp:
-            system_message_contents += disp
+        token_usage_str = context_window_func(num_tokens)
+        system_message_contents = token_usage_str + system_message_contents
+        
+        system_message_contents += disps[0]
         all_messages.append(SystemMessage(content=system_message_contents))
 
-        print('\n\n=========================\n')
-        # # https://stackoverflow.com/questions/76639580/
-        prompt = ChatPromptTemplate.from_messages(all_messages)
-        print(prompt.format())
-        break
+        print('\n=========================')
+        print(f"Goal: {goal}")
+        print(token_usage_str)
+        print(f"\nGlobal Actions:")
+        for global_act in GLOBAL_ACTIONS:
+            print(f'- {color_tags(global_act)}')
+        print('')
+        print(disps[1])
+        # break
 
-        for message in all_messages[1:]:
-            print(f"{message.type}:\n{message.content}")
+        # for message in all_messages[2:]:
+        #     print(f"{message.type}:\n{message.content}")
+        # # https://stackoverflow.com/questions/76639580/
+        # prompt = ChatPromptTemplate.from_messages(all_messages)
+        # print(prompt.format())
 
         text = ''
-        print("--------------\nAgent:")
+        print("Agent:")
         for chunk in llm.stream(all_messages):
             chunk_content = chunk.content
             text += chunk_content
@@ -135,7 +154,7 @@ def main():
                 end_program = True
                 add_reason(reasons, f'({FINISH_TAG[1:]}): {params[0]}')
                 # print(f"Final Reasons:\n{reasons}")
-                print(f"\nFinal Notes:\n{notes}")
+                print(f"\nFinal Notes:\n{notes[-2:]}")
                 break
         continue_yes = input("Continue? (y/n): ")
 
