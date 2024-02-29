@@ -1,5 +1,5 @@
 from file_viewer import all_tags, tag_attrs
-from prompt import global_tags, global_tag_attrs
+from main import global_tags, global_tag_attrs
 from text_util import extract_commands, parse_command_and_params
 
 
