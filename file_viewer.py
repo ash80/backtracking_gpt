@@ -1,8 +1,8 @@
 import re
 import math
+from global_actions import REASON_ATTR
 from prettify_util import color_tags, wrap_and_format_line
-
-from text_util import REASON_ATTR, extract_commands, parse_command_and_params
+from text_util import extract_commands, parse_command_and_params
 
 SEARCH_TAG = '<search'
 NEXT_TAG = '<next_page'

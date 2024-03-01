@@ -1,48 +1,12 @@
 from typing import List, Literal
 from langchain_openai import ChatOpenAI
-from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
+from langchain_core.messages import BaseMessage, SystemMessage
 
 from file_list_viewer import TerminalFileListViewer
+from global_actions import DELETE_TAG, FINISH_TAG, GLOBAL_ACTIONS, GLOBAL_TAG_ATTRS, GLOBAL_TAGS, NOTE_TAG, add_note, add_reason, delete_note
 from prettify_util import color_tags
-from text_util import REASON_ATTR, extract_commands, parse_command_and_params
-# from langchain.prompts import HumanMessagePromptTemplate
-
-RESOURCE = 'Resource'
-
-DELETE_TAG = '<delete'
-NOTE_TAG = '<note'
-FINISH_TAG = '<finish'
-
-global_tags = [DELETE_TAG, NOTE_TAG, FINISH_TAG]
-
-global_tag_attrs = {
-    DELETE_TAG: ["starts_with", REASON_ATTR],
-    NOTE_TAG: ["note"],
-    FINISH_TAG: [REASON_ATTR]
-}
-
-MAX_NUM_PAST_ACTIONS = 10
-
-NOTES_START_STRING = "Notes (old to new):"
-REASONS_START_STRING = f"Last {MAX_NUM_PAST_ACTIONS} actions and reasons (old to new):"
-
-def delete_note(notes: List[str], reasons: List[str], starts_with: str, reason: str):
-    if (starts_with.startswith('- ')):
-        starts_with = starts_with[2:]
-    for note in notes:
-        if note.startswith(starts_with):
-            notes.remove(note)
-            add_reason(reasons, f'({DELETE_TAG[1:]}): {reason}')
-
-
-def add_note(notes: List[str], note: str):
-    notes.append(note)
-
-
-def add_reason(reasons: List[str], reason: str):
-    if len(reasons) >= MAX_NUM_PAST_ACTIONS:
-        del reasons[0]
-    reasons.append(reason)
+from prompts import NOTES_START_STRING, REASONS_START_STRING, get_base_system_message, get_human_message
+from text_util import extract_commands, parse_command_and_params
 
 
 def list_to_str(a_list):
@@ -50,35 +14,6 @@ def list_to_str(a_list):
     for item in a_list:
         final_str += f"- {item}\n"
     return final_str
-
-NOTE_ACT = f'{NOTE_TAG} {global_tag_attrs[NOTE_TAG][0]}="?"/>'
-DELETE_ACT = f'{DELETE_TAG} {global_tag_attrs[DELETE_TAG][0]}="?" {REASON_ATTR}="?"/>'
-FINISH_ACT = f'{FINISH_TAG} {REASON_ATTR}="?"/>'
-
-GLOBAL_ACTIONS = [NOTE_ACT, DELETE_ACT, FINISH_ACT]
-
-def get_base_system_message() -> SystemMessage:
-    return SystemMessage(content=f'''You are a helpful LLM agent. You objective is to find the info that perfectly achieves the "goal". Rest assured that available {RESOURCE} is sufficient to achieve the goal.
-You have a finite token length so you need keep your notes under that length.
-You can take some actions by typing out that action. Each action can be identified by an html like tag. Most actions have a {REASON_ATTR}="?" attribute. Replace ? with why you're taking that action.
-Below are some global actions that are always available:
-
-1. {NOTE_ACT}: To take a variety of notes.
-2. {DELETE_ACT}: To delete a previously added note. Replace ? for {global_tag_attrs[DELETE_TAG][0]} with the few starting words of the summary.
-3. {FINISH_ACT}: Only type this action when you have successfully achieved your goal.
-
-To fit everything in the limited token length, it's essential to keep on deleting the notes that become irrelevant in light of new info.
-Other actions are available with the {RESOURCE}.
-Don't take the same action as in the "{REASONS_START_STRING}" list.
-All the notes are added to "{NOTES_START_STRING}" list, which will be fed to you in the next iteration.
-You can select at most one action from the {RESOURCE} below and one or more from above 3 global actions. You MUST always take {NOTE_TAG} action to note down alternative actions you could take, and actions you want to avoid. So that you know how to backtrack if you get stuck.
-You must only respond with two or more actions and ensure that tags you generate match the displayed format.
-{RESOURCE} operate in different views. Each view has different set of actions. Any action you took in the past may not work now because {RESOURCE} may be in a different view. Only take actions that are in the global actions or {RESOURCE} action list. An action that isn't wrapped with html-tag is not active.
-''')
-
-
-def get_human_message(goal) -> HumanMessage:
-    return HumanMessage(content=f'Goal: {goal}')
 
 
 def main():
@@ -142,9 +77,9 @@ def main():
             text += chunk_content
             print(chunk_content, end='' if chunk_content else '\n', flush=True)
 
-        commands = extract_commands(text, global_tags)
+        commands = extract_commands(text, GLOBAL_TAGS)
         for command in commands:
-            command_tag, params = parse_command_and_params(command, global_tags, global_tag_attrs)
+            command_tag, params = parse_command_and_params(command, GLOBAL_TAGS, GLOBAL_TAG_ATTRS)
             if command_tag == DELETE_TAG:
                 delete_note(notes, reasons, *params)
             elif command_tag == NOTE_TAG:

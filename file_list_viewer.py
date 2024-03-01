@@ -1,9 +1,9 @@
 import os
 from typing import Optional
 from file_viewer import TerminalFileViewer
+from global_actions import REASON_ATTR
 from prettify_util import color_tags
-
-from text_util import REASON_ATTR, extract_commands, parse_command_and_params
+from text_util import extract_commands, parse_command_and_params
 
 OPEN_TAG = '<open_file'
 

@@ -1,8 +1,6 @@
 import re
 from typing import List
 
-REASON_ATTR = 'reason'
-
 def extract_commands(text: str, all_tags: str) -> list[str]:
     # Create a regex pattern to match any of the tags in all_tags followed by any characters and then the closing '/>'
     pattern = '|'.join([f"({tag}\s+[^/>]*?/>)" for tag in all_tags])
